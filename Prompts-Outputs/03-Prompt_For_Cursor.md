@@ -1,0 +1,1 @@
+Please Read @02-prompt.md  develop the system, including tests. I want it fully tested and running when you are done

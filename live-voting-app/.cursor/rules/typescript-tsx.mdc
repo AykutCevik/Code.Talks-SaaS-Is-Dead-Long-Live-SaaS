@@ -1,0 +1,163 @@
+---
+globs: **/*.ts,**/*.tsx
+alwaysApply: false
+---
+# TypeScript & TSX Rules
+
+## Type Definitions
+
+- Define interfaces for all data structures
+- Use `interface` for object shapes, `type` for unions/intersections
+- Export shared interfaces from `/lib/types.ts`
+- Use readonly for immutable properties
+
+## Example Patterns
+
+### Good: Explicit interface
+```typescript
+interface Question {
+  id: string;
+  text: string;
+  order: number;
+}
+```
+
+### Good: Function with explicit return type
+```typescript
+async function getQuestions(): Promise<Question[]> {
+  return await prisma.question.findMany();
+}
+```
+
+### Avoid: Implicit any
+```typescript
+const votes = body.votes; // Bad
+const votes: VoteInput[] = body.votes; // Good
+```
+
+## Next.js Specific
+
+- Mark client components with `'use client'` directive at the top
+- Server components don't need the directive (default)
+- Use `NextRequest` and `NextResponse` for API routes
+- Export route handlers as named functions: `GET`, `POST`, etc.
+
+## React Component Structure
+
+### Component Organization
+- Use functional components with hooks
+- Client components: Pages with interactivity, forms, real-time updates
+- Server components: Static content, data fetching
+- Keep components focused on single responsibility
+
+### State Management
+- Use `useState` for component-local state
+- Use `useEffect` for side effects (API calls, subscriptions)
+- Clean up effects that create subscriptions (SSE, intervals)
+
+### Example Pattern
+```typescript
+'use client';
+
+export default function VotePage() {
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<Data[]>([]);
+
+  useEffect(() => {
+    async function init() {
+      const response = await fetch('/api/data');
+      const result = await response.json();
+      setData(result);
+      setLoading(false);
+    }
+    init();
+  }, []);
+
+  if (loading) return <div>Loading...</div>;
+  return <div>{/* content */}</div>;
+}
+```
+
+## Styling
+
+- Use Tailwind CSS utility classes
+- Use shadcn/ui components from `/components/ui`
+- Define color constants for question-specific colors
+- Use consistent spacing (mb-4, mb-6, mb-8)
+
+## Common Patterns
+
+### Fetching Data Client-Side
+```typescript
+const [data, setData] = useState<Type[]>([]);
+const [loading, setLoading] = useState(true);
+
+useEffect(() => {
+  async function fetchData() {
+    const response = await fetch('/api/endpoint');
+    const result = await response.json();
+    setData(result);
+    setLoading(false);
+  }
+  fetchData();
+}, []);
+```
+
+### SSE Subscription (Admin Dashboard)
+```typescript
+useEffect(() => {
+  const eventSource = new EventSource('/api/votes/stream');
+  
+  eventSource.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    setStats(data);
+  };
+
+  eventSource.onerror = () => {
+    eventSource.close();
+    // Fallback to polling
+  };
+
+  return () => eventSource.close(); // Cleanup
+}, []);
+```
+
+### Form Submission with Loading State
+```typescript
+const [submitting, setSubmitting] = useState(false);
+
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setSubmitting(true);
+  
+  try {
+    const response = await fetch('/api/votes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ votes, fingerprint })
+    });
+    
+    if (response.ok) {
+      // Success
+    } else {
+      const error = await response.json();
+      alert(error.error);
+    }
+  } catch (error) {
+    alert('Network error');
+  } finally {
+    setSubmitting(false);
+  }
+};
+```
+
+## Anti-Patterns
+
+❌ **Don't** use `any` without good reason  
+✅ **Do** define proper interfaces
+
+❌ **Don't** skip cleanup in useEffect  
+✅ **Do** return cleanup function for subscriptions
+
+❌ **Don't** forget to close SSE connections  
+✅ **Do** close in useEffect cleanup

@@ -1,0 +1,3 @@
+I need a prompt for Cursor that creates a plan. I'm building a 30-minute presentation for a conference talk "SaaS is Dead Long live SaaS". We want to give Cursor a prompt that creates a plan and then develops the software. The tech stack should be SaaS-capable but as simple and monolithic as possible. The goal is to build something like Mentimeter. One page with a QR code and 3 graphs for 3 questions and a QR code where people see a page where they can rate the 3 questions from 1-5, the questions should be stored in a database but filled via the seeder. The display should be super modern and live and animated when new points come in. like Mentimeter
+
+

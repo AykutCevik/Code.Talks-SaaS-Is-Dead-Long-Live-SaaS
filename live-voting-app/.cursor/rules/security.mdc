@@ -1,0 +1,114 @@
+---
+description: "Security guidelines for vote security, data privacy (DSGVO), IP hashing, fingerprint validation, and authentication. Applied to security-critical code."
+---
+
+# Security Guidelines
+
+## Vote Security (Defense in Depth)
+
+1. **Browser Fingerprint** (Primary): Unique device identifier
+2. **LocalStorage** (UX Layer): Prevent accidental re-votes
+3. **IP Rate-Limiting** (Secondary): Max 3 votes per IP
+
+## Data Privacy (DSGVO)
+
+- Never store raw IP addresses (only SHA-256 hashes)
+- Use IP_SALT from environment for hashing
+- Fingerprints are pseudo-anonymous (no PII)
+- No user accounts or personal data stored
+
+## Environment Variables
+
+- Store secrets in `.env` (never commit)
+- Provide `.env.example` template
+- Required vars: `DATABASE_URL`, `ADMIN_SECRET`, `IP_SALT`
+
+## IP Address Hashing
+
+Always hash IP addresses before storing:
+
+```typescript
+const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 
+           request.headers.get('x-real-ip') || 
+           'unknown';
+const ipHash = crypto.createHash('sha256')
+  .update(ip + (process.env.IP_SALT || ''))
+  .digest('hex');
+```
+
+## Fingerprint Validation
+
+```typescript
+// Check: Hat dieser Fingerprint schon abgestimmt?
+const existingSession = await prisma.voteSession.findUnique({
+  where: { fingerprint }
+});
+
+if (existingSession) {
+  return NextResponse.json(
+    { error: 'Du hast bereits abgestimmt!' }, 
+    { status: 403 }
+  );
+}
+```
+
+## Rate Limiting
+
+```typescript
+// Check: IP-Rate-Limit (max 3 Votes pro IP)
+const ipVoteCount = await prisma.voteSession.count({
+  where: { ipHash }
+});
+
+if (ipVoteCount >= 3) {
+  return NextResponse.json(
+    { error: 'Rate-Limit: Zu viele Votes von diesem Netzwerk' }, 
+    { status: 429 }
+  );
+}
+```
+
+## Admin Authentication
+
+```typescript
+const secret = request.headers.get('x-admin-secret');
+
+if (secret !== process.env.ADMIN_SECRET) {
+  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+}
+```
+
+## Client-Side Vote Prevention
+
+```typescript
+// Check localStorage before allowing vote
+const localVoted = localStorage.getItem('has_voted');
+if (localVoted === 'true') {
+  setHasVoted(true);
+  return;
+}
+
+// Check with server
+const checkResponse = await fetch(`/api/votes/check?fp=${fingerprint}`);
+const checkData = await checkResponse.json();
+
+if (checkData.hasVoted) {
+  setHasVoted(true);
+  localStorage.setItem('has_voted', 'true');
+  return;
+}
+```
+
+## Anti-Patterns
+
+❌ **Don't** store raw IP addresses  
+✅ **Do** hash with SHA-256 + salt
+
+❌ **Don't** commit `.env` files with secrets  
+✅ **Do** use `.env.example` template
+
+❌ **Don't** skip fingerprint validation  
+✅ **Do** check VoteSession before accepting votes
+
+❌ **Don't** expose internal errors  
+✅ **Do** return generic error messages to clients

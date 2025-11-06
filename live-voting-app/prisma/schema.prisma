@@ -1,0 +1,40 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Question {
+  id        String   @id @default(cuid())
+  text      String
+  order     Int
+  createdAt DateTime @default(now())
+  votes     Vote[]
+}
+
+model Vote {
+  id              String   @id @default(cuid())
+  questionId      String
+  rating          Int      // 0-10 (Slider-Wert)
+  fingerprint     String   // Browser-Fingerprint Hash
+  ipHash          String   // SHA-256 Hash der IP
+  createdAt       DateTime @default(now())
+  question        Question @relation(fields: [questionId], references: [id])
+  
+  @@index([fingerprint])
+  @@index([ipHash])
+}
+
+model VoteSession {
+  id              String   @id @default(cuid())
+  fingerprint     String   @unique
+  hasVoted        Boolean  @default(true)
+  votedAt         DateTime @default(now())
+  ipHash          String
+}

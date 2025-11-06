@@ -1,0 +1,86 @@
+---
+globs: live-voting-app/app/api/**/route.ts
+alwaysApply: false
+---
+# API Route Rules
+
+## Structure
+
+- Export async functions: `GET`, `POST`, `PUT`, `DELETE`
+- Use `NextRequest` for request, `NextResponse` for response
+- Always wrap in try-catch with 500 error fallback
+- Return JSON with `NextResponse.json()`
+
+## Request Validation
+
+- Validate all user inputs at the start of the handler
+- Check required fields existence
+- Validate value ranges (e.g., ratings 0-10)
+- Return 400 for validation errors
+
+## Security
+
+- Hash IP addresses with SHA-256 + salt (never store raw IPs)
+- Use `x-forwarded-for` or `x-real-ip` headers for IP
+- Check fingerprint uniqueness before accepting votes
+- Implement rate limiting (max 3 votes per IP)
+
+## Example Pattern
+
+```typescript
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { votes, fingerprint } = body;
+    
+    // 1. Validation
+    if (!fingerprint || !votes || votes.length !== 3) {
+      return NextResponse.json({ error: 'Invalid data' }, { status: 400 });
+    }
+    
+    // 2. Business logic
+    // ...
+    
+    // 3. Database operations
+    await prisma.$transaction([
+      // Atomic operations
+    ]);
+    
+    return NextResponse.json({ success: true });
+    
+  } catch (error) {
+    console.error('Error:', error);
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+  }
+}
+```
+
+## Response Codes
+
+- **200**: Success
+- **400**: Invalid input/validation error
+- **403**: Forbidden (duplicate vote)
+- **429**: Rate limit exceeded
+- **500**: Server error
+
+## IP Hashing Pattern
+
+```typescript
+const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 
+           request.headers.get('x-real-ip') || 
+           'unknown';
+const ipHash = crypto.createHash('sha256')
+  .update(ip + (process.env.IP_SALT || ''))
+  .digest('hex');
+```
+
+## Anti-Patterns
+
+❌ **Don't** forget try-catch in API routes  
+✅ **Do** wrap async operations with error handling
+
+❌ **Don't** store raw IP addresses  
+✅ **Do** hash with SHA-256 + salt
+
+❌ **Don't** expose internal errors  
+✅ **Do** return generic "Server error" message

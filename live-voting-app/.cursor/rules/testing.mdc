@@ -1,0 +1,149 @@
+---
+globs: live-voting-app/tests/**/*.test.ts,**/*.test.ts,**/*.test.tsx,**/*.spec.ts,**/*.spec.tsx
+alwaysApply: false
+---
+# Testing Rules
+
+## Test Structure
+
+- Use Vitest: `describe`, `it`, `expect`, `beforeEach`
+- Group related tests in `describe` blocks
+- Use descriptive test names: "should [expected behavior]"
+- Clean up test data in `beforeEach` if needed
+
+## Integration Tests
+
+- Test API endpoints via `fetch()` to `http://localhost:3000`
+- Test both success and error cases
+- Verify database state after operations
+- Test security measures (duplicate prevention, rate limiting)
+
+## Example Pattern
+
+```typescript
+describe('POST /api/votes', () => {
+  beforeEach(async () => {
+    // Setup test data
+  });
+
+  it('should successfully submit valid votes', async () => {
+    const response = await fetch('http://localhost:3000/api/votes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ votes, fingerprint })
+    });
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.success).toBe(true);
+    
+    // Verify database state
+    const storedVotes = await prisma.vote.findMany();
+    expect(storedVotes).toHaveLength(3);
+  });
+
+  it('should reject invalid input', async () => {
+    // Test error case
+  });
+});
+```
+
+## Test Coverage
+
+- All API routes must have tests
+- Test critical flows (voting, duplicate prevention)
+- Test edge cases (rate limiting, validation)
+- No need for unit tests (integration tests sufficient for demo)
+
+## Testing Security Features
+
+### Duplicate Vote Prevention
+```typescript
+it('should prevent duplicate votes with same fingerprint', async () => {
+  const fingerprint = 'test-fingerprint';
+  const votes = questionIds.map(id => ({
+    questionId: id,
+    rating: 7
+  }));
+
+  // First vote
+  await fetch('http://localhost:3000/api/votes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ votes, fingerprint })
+  });
+
+  // Second vote with same fingerprint
+  const response = await fetch('http://localhost:3000/api/votes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ votes, fingerprint })
+  });
+
+  expect(response.status).toBe(403);
+  const data = await response.json();
+  expect(data.error).toContain('bereits abgestimmt');
+});
+```
+
+### Rate Limiting
+```typescript
+it('should enforce IP rate limiting', async () => {
+  const testIp = 'test-ip';
+  const ipHash = crypto.createHash('sha256')
+    .update(testIp + (process.env.IP_SALT || ''))
+    .digest('hex');
+  
+  // Create 3 vote sessions with same IP
+  await prisma.voteSession.createMany({
+    data: [
+      { fingerprint: 'fp1', ipHash },
+      { fingerprint: 'fp2', ipHash },
+      { fingerprint: 'fp3', ipHash },
+    ]
+  });
+
+  const response = await fetch('http://localhost:3000/api/votes', {
+    method: 'POST',
+    headers: { 
+      'Content-Type': 'application/json',
+      'x-forwarded-for': testIp
+    },
+    body: JSON.stringify({ votes, fingerprint: 'fp4' })
+  });
+
+  expect(response.status).toBe(429);
+  const data = await response.json();
+  expect(data.error).toContain('Rate-Limit');
+});
+```
+
+## Database State Verification
+
+Always verify database state after write operations:
+
+```typescript
+// After submitting votes
+const storedVotes = await prisma.vote.findMany({
+  where: { fingerprint }
+});
+expect(storedVotes).toHaveLength(3);
+
+// After reset
+const remainingVotes = await prisma.vote.count();
+expect(remainingVotes).toBe(0);
+```
+
+## Test Data Cleanup
+
+```typescript
+beforeEach(async () => {
+  // Clean up test data before each test
+  await prisma.vote.deleteMany({});
+  await prisma.voteSession.deleteMany({});
+  
+  // Fetch fresh question IDs
+  const questions = await prisma.question.findMany();
+  questionIds = questions.map(q => q.id);
+});
+```

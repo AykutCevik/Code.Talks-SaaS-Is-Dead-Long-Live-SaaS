@@ -1,0 +1,171 @@
+---
+description: "Global rules for the Live Voting App project architecture, code style, and demo-specific guidelines. Always applied to provide project context."
+alwaysApply: true
+---
+
+# Project Architecture & Global Rules
+
+## Project Overview
+
+This is a live voting application (Mentimeter-style) built as a demo for the talk "SaaS is Dead, Long Live SaaS". The app demonstrates how to build a fully functional SaaS application with a modern monolithic stack.
+
+### Tech Stack
+- **Framework**: Next.js 14+ (App Router) with TypeScript
+- **Database**: SQLite with Prisma ORM (portable, no external DB needed)
+- **Styling**: Tailwind CSS + shadcn/ui components
+- **Real-time**: Server-Sent Events (SSE) for live updates
+- **Security**: Browser fingerprinting (@fingerprintjs/fingerprintjs) + IP rate-limiting
+- **Testing**: Vitest with integration tests
+
+### Project Structure
+```
+/app
+  /admin          # Dashboard with charts + QR code
+  /vote           # Voting interface for participants
+  /api
+    /votes        # Vote submission, checking, stats, SSE stream
+    /questions    # Fetch questions
+    /admin/reset  # Reset all votes
+/components
+  /ui             # shadcn components
+/lib
+  db.ts           # Prisma singleton
+  fingerprint.ts  # Fingerprint utilities
+  types.ts        # Shared TypeScript interfaces
+/prisma
+  schema.prisma   # Database schema
+  seed.ts         # Seed script with 3 questions
+/tests
+  /integration    # API and flow tests
+```
+
+### Core Concepts
+- **Monolithic Architecture**: Everything in one codebase, no microservices
+- **Vote Security**: Fingerprint + IP hashing + localStorage (defense in depth)
+- **Real-time Updates**: Admin dashboard updates live via SSE
+- **Demo-Ready**: Keep code simple and explainable in a conference talk
+
+## Global Code Style
+
+### General Principles
+- Use TypeScript strict mode
+- Prefer explicit types over `any` (only use `any` for quick prototyping)
+- Use `async/await` over `.then()` chains
+- Use template literals for string interpolation
+- Use optional chaining (`?.`) and nullish coalescing (`??`)
+- Keep functions focused and single-purpose
+- Prefer named exports for utilities, default export for pages/components
+
+### Import Organization
+```typescript
+// 1. External packages
+import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
+
+// 2. Internal imports (using @ alias)
+import prisma from '@/lib/db';
+import { getFingerprint } from '@/lib/fingerprint';
+
+// 3. Types
+import type { Question, Vote } from '@/lib/types';
+```
+
+### Comments
+- Use German comments for business logic (matches the German UI)
+- Use English comments for technical implementation details
+- Add numbered comments for multi-step processes (e.g., "1. Validierung", "2. IP-Hash generieren")
+- Document complex algorithms and security measures
+
+### Error Handling
+- Always wrap async operations in try-catch blocks
+- Return consistent error format: `{ error: string }`
+- Use appropriate HTTP status codes (400, 403, 429, 500)
+- Log errors with `console.error()` for debugging
+- Never expose internal errors to the client (use generic "Server error")
+
+## File Organization
+
+### When to Create New Files
+- Keep API routes in separate `route.ts` files
+- Extract large components (>200 lines) into separate files
+- Shared utilities go in `/lib`
+- Types used in multiple files go in `/lib/types.ts`
+
+### When to Keep Code Inline
+- Small, single-use components can stay inline
+- Simple utility functions in the same file
+- Demo-focused: Prefer readability over over-abstraction
+
+### Naming Conventions
+- **Files**: kebab-case for utilities, PascalCase for components
+- **Components**: PascalCase (e.g., `VotePage`, `DistributionCurve`)
+- **Functions**: camelCase (e.g., `getFingerprint`, `fetchStats`)
+- **Constants**: UPPER_SNAKE_CASE (e.g., `QUESTION_COLORS`)
+- **Interfaces**: PascalCase (e.g., `Question`, `VoteStats`)
+
+## Demo-Specific Guidelines
+
+### Keep It Simple
+- This is a demo for a conference talk
+- Code should be explainable in 30 minutes
+- Avoid over-engineering and premature abstractions
+- Prefer clear, verbose code over clever tricks
+
+### Performance
+- Voting must be fast (<200ms response)
+- No unnecessary re-renders in React components
+- Use SSE for real-time updates (efficient)
+
+### Presentation-Ready
+- Admin view must be readable from 5m distance
+- Large fonts (min 18px for questions)
+- High contrast colors
+- Smooth animations (Framer Motion)
+
+## Quick Reference
+
+### Key Endpoints
+- `GET /api/questions` - Fetch questions
+- `POST /api/votes` - Submit votes
+- `GET /api/votes/check?fp={fp}` - Check if voted
+- `GET /api/votes/stats` - Get aggregated stats
+- `GET /api/votes/stream` - SSE for live updates
+- `POST /api/admin/reset` - Reset all votes (requires secret)
+
+### Key Pages
+- `/vote` - Voting interface (mobile-optimized)
+- `/admin` - Dashboard with QR + charts
+
+### Environment Variables
+```env
+DATABASE_URL="file:./dev.db"
+ADMIN_SECRET="your-secret"
+IP_SALT="random-salt"
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
+AUTO_VOTE_BOOST="false"
+```
+
+### Color Scheme
+- Question 1: Blue `#5B7FE8`
+- Question 2: Coral `#E8766B`
+- Question 3: Dark Blue `#4A5978`
+- Background: White `#FFFFFF` (vote), Off-white `#FAFAFA` (admin)
+
+### Development Workflow
+```bash
+# Start development
+npm run dev
+
+# Run tests
+npm test
+npm run test:watch
+
+# Database operations
+npm run prisma:migrate
+npm run prisma:seed
+npm run prisma:studio
+
+# Build for production
+npm run build
+npm start
+```

@@ -1,0 +1,117 @@
+---
+globs: live-voting-app/app/api/**/route.ts,live-voting-app/lib/db.ts,live-voting-app/prisma/**/*
+alwaysApply: false
+---
+# Database & Prisma ORM Rules
+
+## Connection
+
+- Always import from `@/lib/db` singleton (never create new PrismaClient)
+- Never import `PrismaClient` directly in application code
+
+### Good
+```typescript
+import prisma from '@/lib/db';
+```
+
+### Bad
+```typescript
+import { PrismaClient } from '@prisma/client';
+const prisma = new PrismaClient();
+```
+
+## Transactions
+
+- Use `$transaction` for multi-step write operations
+- Ensures atomicity (all succeed or all fail)
+- Critical for vote submission (VoteSession + Votes)
+
+### Example
+```typescript
+await prisma.$transaction([
+  prisma.voteSession.create({ data: { fingerprint, ipHash } }),
+  ...votes.map(vote => 
+    prisma.vote.create({ data: vote })
+  )
+]);
+```
+
+## Queries
+
+- Use Prisma's type-safe query methods
+- Use `include` for relations, not manual joins
+- Use `orderBy` for consistent ordering
+- Always handle potential `null` returns from `findUnique`
+
+### Example: Fetch with relations
+```typescript
+const questions = await prisma.question.findMany({
+  include: {
+    votes: true
+  },
+  orderBy: { order: 'asc' }
+});
+```
+
+## Schema Changes
+
+1. Modify `/prisma/schema.prisma`
+2. Run `npx prisma migrate dev --name descriptive_name`
+3. Update seed script if models change
+4. Regenerate client: `npx prisma generate`
+
+## Common Patterns
+
+### Find Unique with Null Check
+```typescript
+const session = await prisma.voteSession.findUnique({
+  where: { fingerprint }
+});
+
+if (session) {
+  // Handle existing session
+}
+```
+
+### Count for Rate Limiting
+```typescript
+const ipVoteCount = await prisma.voteSession.count({
+  where: { ipHash }
+});
+
+if (ipVoteCount >= 3) {
+  return NextResponse.json(
+    { error: 'Rate-Limit: Zu viele Votes von diesem Netzwerk' }, 
+    { status: 429 }
+  );
+}
+```
+
+### Aggregation with Relations
+```typescript
+const questions = await prisma.question.findMany({
+  include: {
+    votes: true
+  },
+  orderBy: { order: 'asc' }
+});
+
+const stats = questions.map(q => ({
+  questionId: q.id,
+  totalVotes: q.votes.length,
+  average: q.votes.length > 0
+    ? q.votes.reduce((sum, v) => sum + v.rating, 0) / q.votes.length
+    : 0
+}));
+```
+
+## Anti-Patterns
+
+❌ **Don't** create new PrismaClient instances  
+✅ **Do** use the singleton from `@/lib/db`
+
+❌ **Don't** forget to handle null from findUnique  
+✅ **Do** check if result exists before using
+
+❌ **Don't** use multiple separate writes for atomic operations  
+✅ **Do** use `$transaction` for multi-step writes
